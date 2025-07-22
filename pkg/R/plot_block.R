@@ -24,10 +24,20 @@
 
 plot_block <- function(blocklist, type="snp", orientation="snp", include=TRUE, indi=NULL, min_to_plot = 5,
                       intensity=0.7, add_sort=TRUE, max_step=500,
-                      snp_ori=NULL,
+                      snp_ori=NULL, intersect_func=TRUE,
                       export_order=FALSE, import_order=NULL,
+                      col = NULL,
                       xlim=NULL, n_colors=20){
 
+  
+  if(is.logical(intersect_func) && intersect_func){
+    intersect_func <- HaploBlocker::intersect_c
+  } else if(is.logical(intersect_func) && !intersect_func){
+    intersect_func <- base::intersect
+  } else{
+    intersect_func <- intersect_func
+  }
+  
   if(length(indi)==0){
     indi <- indi_calc(blocklist)
   }
@@ -96,31 +106,40 @@ plot_block <- function(blocklist, type="snp", orientation="snp", include=TRUE, i
           for(step in 1:max_step){
 
             if(length(groups)<length(added)){
-              if((index-step) >0 && length(intersect(blocklist[[index-step]][[6]], added))>0){
+              if((index-step) >0 && length(intersect_func(blocklist[[index-step]][[6]], added))>0){
                 new_groups <- list()
                 for(group in 1:length(groups)){
-                  same <- base::intersect(groups[[group]], blocklist[[index-step]][[6]])
-                  rest <- base::intersect(groups[[group]], (1:indi)[-blocklist[[index-step]][[6]]])
-                  if(length(same)>0){
-                    new_groups[[length(new_groups)+1]] <- same
-                  }
-                  if(length(rest)>0){
-                    new_groups[[length(new_groups)+1]] <- rest
+                  
+                  if(length(groups[[group]]) < 3){
+                    new_groups[[length(new_groups)+1]] = groups[[group]]
+                  } else{
+                    same <- intersect_func(groups[[group]], blocklist[[index-step]][[6]])
+                    rest <- intersect_func(groups[[group]], (1:indi)[-blocklist[[index-step]][[6]]])
+                    if(length(same)>0){
+                      new_groups[[length(new_groups)+1]] <- same
+                    }
+                    if(length(rest)>0){
+                      new_groups[[length(new_groups)+1]] <- rest
+                    }
                   }
 
                 }
                 groups <- new_groups
               }
-              if((index+step) <=length(blocklist) && length(intersect(blocklist[[index+step]][[6]], added))>0){
+              if((index+step) <=length(blocklist) && length(intersect_func(blocklist[[index+step]][[6]], added))>0){
                 new_groups <- list()
                 for(group in 1:length(groups)){
-                  same <- base::intersect(groups[[group]], blocklist[[index+step]][[6]])
-                  rest <- base::intersect(groups[[group]], (1:indi)[-blocklist[[index+step]][[6]]])
-                  if(length(same)>0){
-                    new_groups[[length(new_groups)+1]] <- same
-                  }
-                  if(length(rest)>0){
-                    new_groups[[length(new_groups)+1]] <- rest
+                  if(length(groups[[group]]) < 3){
+                    new_groups[[length(new_groups)+1]] = groups[[group]]
+                  } else{
+                    same <- intersect_func(groups[[group]], blocklist[[index+step]][[6]])
+                    rest <- intersect_func(groups[[group]], (1:indi)[-blocklist[[index+step]][[6]]])
+                    if(length(same)>0){
+                      new_groups[[length(new_groups)+1]] <- same
+                    }
+                    if(length(rest)>0){
+                      new_groups[[length(new_groups)+1]] <- rest
+                    }
                   }
 
 
@@ -161,27 +180,35 @@ plot_block <- function(blocklist, type="snp", orientation="snp", include=TRUE, i
   }
 
 
-  if(requireNamespace("RColorBrewer")){
-    qual_col_pals = RColorBrewer::brewer.pal.info[RColorBrewer::brewer.pal.info$category == 'qual',]
-    col_vector = unlist(mapply(RColorBrewer::brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
-    used_color <- sample(col_vector, n_colors)
-  } else{
-    used_color <- 1:8
-    n_colors <- 8
+  if(length(col)==0){
+    if(requireNamespace("RColorBrewer")){
+      qual_col_pals = RColorBrewer::brewer.pal.info[RColorBrewer::brewer.pal.info$category == 'qual',]
+      col_vector = unlist(mapply(RColorBrewer::brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+      used_color <- sample(col_vector, n_colors)
+    } else{
+      used_color <- 1:8
+      n_colors <- 8
+    }
   }
+
 
 
   activ_colors <- numeric(length(blocklist))
   for(index in 1:length(blocklist)){
     overlap <- duplicated(c(blocklist[[index]][[6]], order))[-(1:blocklist[[index]][[5]])]
     if(sum(overlap) >= min_to_plot){
-      taken <- base::intersect(which(se[,1]<=se[index,2]), which(se[,2]>=se[index,1]))
+      taken <- intersect_func(which(se[,1]<=se[index,2]), which(se[,2]>=se[index,1]))
       block_color <- sort(unique(c(0,activ_colors[taken])))
-      if(length(block_color)>1 && length(block_color)<=n_colors){
-        activ_colors[index] <- sample((1:n_colors)[-block_color],1)
+      if(length(col) > 0){
+        activ_colors[index] = col[index]
       } else{
-        activ_colors[index] <- sample((1:n_colors),1)
+        if(length(block_color)>1 && length(block_color)<=n_colors){
+          activ_colors[index] <- sample((1:n_colors)[-block_color],1)
+        } else{
+          activ_colors[index] <- sample((1:n_colors),1)
+        }
       }
+
 
       poly <- sort(which(overlap))
       takes <- c(TRUE, diff(poly)>1)
@@ -190,13 +217,24 @@ plot_block <- function(blocklist, type="snp", orientation="snp", include=TRUE, i
       size <- c(size, length(poly)-sum(size))
       temp1 <- 1
 
+      x_tmp = NULL
+      y_tmp = NULL
       for(index2 in to_plot){
-        polygon(c(se[index,1], se[index,2], se[index,2], se[index,1]), index2-c(1,1,1-size[temp1],1-size[temp1]),
-                col=adjustcolor(used_color[activ_colors[index]],alpha.f=intensity), lty=0)
+        x_tmp = c(x_tmp, c(se[index,1], se[index,2], se[index,2], se[index,1]))
+        y_tmp = c(y_tmp, index2-c(1,1,1-size[temp1],1-size[temp1]))
         temp1 <- temp1 +1
-
+        
       }
-
+      if(length(col) > 0){
+        polygon(x_tmp, y_tmp,
+                col=adjustcolor(activ_colors[index],alpha.f=intensity), lty=0)
+        
+      } else{
+        polygon(x_tmp, y_tmp,
+                col=adjustcolor(used_color[activ_colors[index]],alpha.f=intensity), lty=0)
+        
+      }
+ 
     }
   }
   if(export_order==TRUE){

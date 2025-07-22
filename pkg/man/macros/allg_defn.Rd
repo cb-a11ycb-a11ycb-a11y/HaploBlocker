@@ -1,8 +1,14 @@
-\newcommand{\martin}{Martin Schlather, \email{schlather@math.uni-mannheim.de}, \url{http://ms.math.uni-mannheim.de}}
-\newcommand{\marco}{Marco Oesting, \email{oesting@mathematik.uni-siegen.de}, \url{https://www.uni-siegen.de/fb6/src/scheffler/mitarbeiter/oesting}}
+% only change in RandomFieldsUtils!!
+\newcommand{\mysoftware}{\url{https://www.wim.uni-mannheim.de/schlather/publications/software}}
+\newcommand{\martin}{Martin Schlather, \email{martin.schlather@uni-mannheim.de}, \url{https://www.wim.uni-mannheim.de/schlather/}}
+\newcommand{\marco}{Marco Oesting, \email{marco.oesting@mathematik.uni-stuttgart.de}, \url{https://www.isa.uni-stuttgart.de/institut/team/Oesting/}}
+\newcommand{\kirstin}{Kirstin Strokorb,  \email{strokorbk@cardiff.ac.uk}  \url{https://www.cardiff.ac.uk/people/view/542989-Dr-Kirstin-Strokorb}}
+
+
 \newcommand{\me}{\author{\martin}}
+\newcommand{\KMM}{\author{\kirstin \marco, \martin}}
+\newcommand{\ChapmanHall}{Chapman-Hall}
+ %\ifelse{latex}{\&}{&} 
+
 \newcommand{\RFU}{See \link[RandomFieldsUtils]{RFoptions}}
 
-
-
-%     library(RandomFieldsUtils); ?RFoptions

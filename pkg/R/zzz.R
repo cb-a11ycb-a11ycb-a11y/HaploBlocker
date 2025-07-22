@@ -22,17 +22,19 @@
 
 
 .onLoad <- function(lib, pkg) {
-   .C("loadoptions")
+  n <- as.integer(0.75 * parallel::detectCores(logical=FALSE) +
+                   0.25 * parallel::detectCores(logical=TRUE))
+   .C(C_loadoptions, n)
 }
 
-GetMessage <-function() .Call("attachoptions")
+## GetMessage <-function() .Call("attachoptions")
 
 .onAttach <- function (lib, pkg) {
+## packageStartupMessage(GetMessage());
 }
 
 .onDetach <- function(lib) {
-  packageStartupMessage(GetMessage());
-}
+ }
 
 .onUnload <- function(lib, pkg){
   .C("detachoptions")

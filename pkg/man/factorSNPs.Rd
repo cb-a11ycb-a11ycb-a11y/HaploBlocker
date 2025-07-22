@@ -25,7 +25,7 @@ factorSNPs(CM, start=1, end=attr(CM, "position")[2] + 1)
 \author{Martin Schlather, \email{schlather@math.uni-mannheim.de}}
 
 \seealso{
-  \command{\link{codeSNPs}}, \command{\link{decodeSNPs}}
+  \code{\link{codeSNPs}}, \code{\link{decodeSNPs}}
 }
 
 \examples{

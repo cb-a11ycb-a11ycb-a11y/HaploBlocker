@@ -39,7 +39,7 @@ colSumsEqualSNPs(CM, start=1, V, select = NULL)
 \author{Martin Schlather, \email{schlather@math.uni-mannheim.de}}
 
 \seealso{
-  \command{\link{codeSNPs}}, \command{\link{decodeSNPs}}
+  \code{\link{codeSNPs}}, \code{\link{decodeSNPs}}
 }
 
 \examples{

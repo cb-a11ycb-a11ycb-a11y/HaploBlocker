@@ -1,41 +1,43 @@
 /*
- Authors
- Martin Schlather, schlather@math.uni-mannheim.de
+ Authors 
+ Martin Schlather, martin.schlather@uni-mannheim.de
 
- Copyright (C) 2017 -- Martin Schlather
+ Copyright (C) 2022-2023 Martin Schlather
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 3
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU General Public License
+ as published by the Free Software Foundation; either version 3
+ of the License, or (at your option) any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
-
 
 //  #define LANDSLIDE 1
 //#include "chb.h"
 // #include <inttypes.h> // uintptr_t
-#include "chaploblocker.h"
-#include "zzz_CHaploblocker.h"
 #include <R_ext/Rdynload.h>
-#include "error.h"
-#include <zzz_RandomFieldsUtils.h>
+#include "Basic_HaploBlocker.h"
+#include "chaploblocker.h"
+#include "xport_import.h"
+#include "zzz_CHaploblocker.h"
+#include "errors_messages.h"
+#include "zzz_RFU.h"
+#include "kleinkram.h"
 
-CALL4(void, orderingInt, int*, data, int, len, int, dim, int *, pos)
 
+//#define LOG std::log
+#define STRNCOPY STRNCPY
+// #define STRNCOPY std::strncpy // strncpy(dest, src, n
+//#define C EIL(X) std::c eil((double) X) // keine Klammern um X!
+//#define STRNCMP std::strncmp 
 
-#define LOG std::log
-#define STRNCOPY std::strncpy // strncpy(dest, src, n
-#define CEIL(X) std::ceil((double) X) // keine Klammern um X!
-//#define STRNCMP std::strncmp
 
 #define BitsPerUnit 32
 #define Int int  // uint32_T
@@ -62,9 +64,8 @@ coding_type_def coding_type;
 bool BigEndian, // true iff 0x8000 -> [0] is != 0
   allowexceptions = true;
 
-Uint
-  ncodes = 0,
-  ONES = 0xFFFFFFFF;
+Long ncodes = 0;
+Uint  ONES = 0xFFFFFFFF;
 int *codes = NULL;
 typedef char ZK[MaxChar +1];
 static ZK *strcodes = NULL,
@@ -77,34 +78,35 @@ SEXP Position = R_NilValue,
   Codings = R_NilValue;
 
 #define BitsPerBlockValues (1 << BitsPerBlock)
-int unequal[BitsPerBlockValues];
+Uint unequal[BitsPerBlockValues];
 
 const char namecodes[] = "strings", namestrcodes[] = "numbers";
 #define ENSURE(CODING) if (CODING == NULL) ERR1("Coding expected that contains %s only.", name##CODING)
 
 
-void fixcodingSub(int nval) {
+void fixcodingSub(Long nval) {
   assert(BitsPerBlockValues >= MaxUserValues);
-  if (sizeof(int) != 4 ||
-      sizeof(short int) != 2 ||
+  if (sizeof(int) != 4 || // OK
+      sizeof(short int) != 2 || // OK
       BitsPerUnit != 32 ||
       BitsPerBlock != 16
       ) BUG;
   if (nval > MaxUserValues)
-    ERR2("maximum number of 'values' is %d. Got %d.", MaxUserValues, nval);
+    ERR2("maximum number of 'values' is %d. Got %ld.",
+	 MaxUserValues, (long) nval);
 
  // bitsPerCode sollen Bitlange von Int exakt teilen
   // potentielle Verlust sollte irrelvant sein, da er nur fuer
   // Zahl der values groesser 4 auftreten kann
-  if (nval < 2) {ERR("not enough values");}
-  bitsPerCode =
-    1L << ((Uint) CEIL( LOG(LOG((double) nval) / LOG2) / LOG2));
+  if (nval < 2) {ERR0("not enough values");}
+  bitsPerCode = (Uint)
+    (1L << ((Uint) CEIL( LOG(LOG((double) nval) / LOG2) / LOG2)));
   codesPerUnit = (Uint) (BitsPerUnit / bitsPerCode);
   assert(codesPerUnit * bitsPerCode == BitsPerUnit);
   leadingShift = bitsPerCode * (codesPerUnit - 1);
   leadingPattern = (ONES >> leadingShift) << leadingShift;
 
-  MaxUserCodesPerBlock = (int) (BitsPerBlock / bitsPerCode);
+  MaxUserCodesPerBlock = (Uint) (BitsPerBlock / bitsPerCode);
   if (MaxUserCodesPerBlock * bitsPerCode != BitsPerBlock) BUG;
 
   // determine how many unequals are in each code
@@ -124,8 +126,8 @@ void fixcodingSub(int nval) {
   if (Where == R_NilValue) Where = install("where.to.find");
 }
 
-void fixcodingIntern(int *values, int nval) {
-  if (codes != NULL) FREE(codes);
+void fixcodingIntern(int *values, Long nval) {
+  if (codes != NULL) { FREE(codes); }
   if (nval == 1) {
     // strings !!!!
     coding_type = local;
@@ -134,7 +136,7 @@ void fixcodingIntern(int *values, int nval) {
   } else {
     coding_type = numeric;
     ncodes = nval;
-    codes = (int*) MALLOC(sizeof(int) * ncodes);
+    codes = (int*) MALLOC(sizeof(*codes) * (Ulong) ncodes);
     for (int i=0; i<(int) ncodes; i++) codes[i] = values[i];
   }
   fixcodingSub(ncodes);
@@ -143,11 +145,11 @@ void fixcodingIntern(int *values, int nval) {
 
 void fixcodingIntern(SEXP values) {
   coding_type = character;
-  int nval = length(values);
+  Long nval = length(values);
   fixcodingSub(nval);
   ncodes = nval;
-  if (strcodes != NULL) FREE(strcodes);
-  strcodes = (ZK*) MALLOC(sizeof(ZK) * nval);
+  if (strcodes != NULL) { FREE(strcodes); }
+  strcodes = (ZK*) MALLOC(sizeof(ZK) * (Ulong) nval);
   for (int i=0; i<nval; i++) {
     if (STRNCMP(ANY[1], CHAR(STRING_ELT(values, i)), MaxChar) == 0)
       STRNCOPY(strcodes[i], ANY[0], MaxChar);
@@ -162,33 +164,20 @@ SEXP fixcoding(SEXP values) {
   return R_NilValue;
 }
 
-void initHaploBlocker() {
-  union {
-    unsigned short a;
-    unsigned char b[2];
-  } ab;
-  ab.a = 0xFF00;
-  BigEndian = ab.b[0] != 0;
-  //  assert(!BigEndian);
-  int value = -2;
-  fixcodingIntern(&value, 1);
-  assert(codes != NULL || coding_type == local);
-}
-
-void redoCoding(SEXP M, int nrow, int ncol) {
+void redoCoding(SEXP M, Long nrow, Long ncol) {
   //  printf("ncodes = %d\n", ncodes);
-  if (strcodes != NULL) FREE(strcodes);
-  strcodes = (ZK *) MALLOC(sizeof(ZK) * nrow * ncodes);
+  if (strcodes != NULL) { FREE(strcodes);}
+  strcodes = (ZK *) MALLOC(sizeof(ZK) *  (Ulong) (nrow * ncodes));
   ZK *pcodes = strcodes;
   int count[MaxUserValues];
   for (int nr=0; nr<nrow; nr++, pcodes += ncodes) {
     ZK temp[MaxUserValues];
-    int idx = nr,
-      order[MaxUserValues],
-      n=0;
+    int idx = nr;
+    int n=0;
+    int order[MaxUserValues];
     for (int nc=0; nc<ncol; nc++, idx+=nrow) {
       const char *m = CHAR(STRING_ELT(M, idx));
-      int i;
+      Long i;
       for (i=0; i<n; i++) {
 	if (STRNCMP(temp[i], m, MaxChar) == 0) {
 	  count[i]--;
@@ -202,35 +191,35 @@ void redoCoding(SEXP M, int nrow, int ncol) {
 	  count[n] = -1;
 	} else {
 	  if (!allowexceptions)
-	    ERR1("maximal number of different entries per SNP reached. Setting 'fixcoding(%d)' is a way out.", ncodes);
+	    ERR1("maximal number of different entries per SNP reached. Setting 'fixcoding(%ld)' is a way out.", (long) ncodes);
 	  // else ignore what is coming up
 	}
 	n++;
      }
     }
-    RU_orderingInt(count, n, 1, order);
-    int i,
-      endfor = n >= (int) ncodes ? (int) ncodes : n;
-    for (i=0; i<endfor; i++) {
+    Ext_orderingInt(count, n, 1, order);
+    Long i = 0;
+    Long endfor = n >= ncodes ? ncodes : n;
+    for (; i<endfor; i++) {
       STRNCOPY(pcodes[i], temp[order[i]], MaxChar);
       pcodes[i][MaxChar] = '\n';
     }
-    int k;
+    Long k;
     if (allowexceptions) {
-      k = (n >= (int) ncodes ? (int) ncodes - 1 : n);
+      k = (n >= ncodes ? ncodes - 1 : n);
       STRNCOPY(pcodes[k], ANY[0], MaxChar);
       pcodes[k][MaxChar] = '\n';
       k++;
     } else k = i;
-    for (i=k; i<(int) ncodes; i++) STRCPY(pcodes[i], DUMMY);
+    for (i=k; i<ncodes; i++) STRCPY(pcodes[i], DUMMY);
     //if (nr < 4) {for (i=0; i<k; i++) PRINTF("%s", pcodes[i]); PRINTF("\n");}
   }
 }
 
 
 
-void codeInner(SEXP M, Uint nrow, Uint ncol, Uint start, Uint *code, bool sXi
-	       , int total
+void codeInner(SEXP M, Uint nrow, Uint ncol, Uint start, Uint *code, bool sXi,
+	       Uint VARIABLE_IS_NOT_USED total
 	       ) {
 
   Uint
@@ -243,9 +232,9 @@ void codeInner(SEXP M, Uint nrow, Uint ncol, Uint start, Uint *code, bool sXi
 
 #define LOOP(EQUAL, ENDOUTER, ENDINNER, CODEINCR, IINCR, IDXFACTOR, LASTI, NUM)\
     for (Uint nc=0; nc<ENDOUTER; nc++, code+=CODEINCR) {		\
-      int idx = nc * IDXFACTOR;						\
+      Uint idx = nc * IDXFACTOR;					\
       for (Uint i=0, n=0, endk = endk0; i<LASTI; i+=IINCR, endk=codesPerUnit){ \
-	assert(i < (Uint) total);					\
+	assert(i < total);					\
 	code[i] = 0;							\
 	for (Uint k=0; k<endk && n < ENDINNER; k++, n++, idx+=IINCR) {	\
 	  Uint l;							\
@@ -259,10 +248,10 @@ void codeInner(SEXP M, Uint nrow, Uint ncol, Uint start, Uint *code, bool sXi
 	    }								\
 	  }								\
 	  if (l >= ncodes) {						\
-	    if (NUM) { ERR2("value '%d' is outside range of {0,..., %d}%", \
-			    (int) m[idx], ncodes - 1);			\
+	    if (NUM) { ERR2("value '%d' is outside range of {0,..., %ld}", \
+			    (int) m[idx], (long) ncodes - 1);		\
 	    } else {							\
-	      Uint n_ncodes = n * ncodes;				\
+	      Long n_ncodes = n * ncodes;				\
 	      if (coding_type == local &&				\
 		!STRNCMP(pcodes[(ncodes - 1) + n_ncodes], DUMMY, MaxChar)) { \
 		assert(!allowexceptions);				\
@@ -315,9 +304,9 @@ void codeInner(SEXP M, Uint nrow, Uint ncol, Uint start, Uint *code, bool sXi
       else LOOP( EQU , nrow, ncol, 1, nrow, 1, codencol, false)
     } else if (coding_type == local) {
       if (sXi) LOOP( EQULOCAL , ncol, nrow, codenrow, 1, nrow, codenrow, false)
-      else LOOP( EQULOCAL, nrow, ncol, 1, nrow, 1, codencol, false)
-    } else ERR("coding type mismatch.");
-  } else ERR("incompatible type of 'M'");
+	else LOOP( EQULOCAL, nrow, ncol, 1, nrow, 1, codencol, false)
+    } else ERR0("coding type mismatch.");
+  } else ERR0("incompatible type of 'M'");
 }
 
 /*
@@ -336,20 +325,20 @@ SEXP codeSNPs(SEXP M, SEXP Start, SEXP RedoCoding, SEXP SNPxINDIV) {
   // M always starts from the very beginning
   // start gives the shift for the coded M
    if (length(M) == 0) return R_NilValue;
-  Uint ncol, nrow, codenrow, codencol,
-    start = INTEGER(Start)[0],
-    startremainder = start % codesPerUnit;
-  int size;
+   Uint ncol, nrow, size,
+     start = (Uint) INTEGER(Start)[0],
+     startremainder = start % codesPerUnit;
+  Long codenrow, codencol;
   SEXP Code;
   bool ismatrix = isMatrix(M),
     snpxind = LOGICAL(SNPxINDIV)[0];
 
   if (ismatrix) {
-    nrow = nrows(M);
-    ncol = ncols(M);
+    nrow = (Uint) nrows(M);
+    ncol = (Uint) ncols(M);
   } else {
     snpxind = true;
-    nrow = length(M);
+    nrow = (Uint) length(M);
     ncol = 1;
   }
 
@@ -359,34 +348,37 @@ SEXP codeSNPs(SEXP M, SEXP Start, SEXP RedoCoding, SEXP SNPxINDIV) {
     codencol = ncol;
     if (coding_type == local && LOGICAL(RedoCoding)[0] &&
 	(strcodes == NULL || ncol > 1)) {
-      if (TYPEOF(M) != STRSXP) ERR("'redo = TRUE' (currently) only allowd for string valued matrices. If the option 'redo = TRUE' is needed for integer values matrices please contact the author.");
-      //if (ncol == 1) ERR("'redo = TRUE', but a single SNP sequence is given");
-      if (start != 0) ERR("recoding must start from the beginning (start=0).");
+      if (TYPEOF(M) != STRSXP) ERR0("'redo = TRUE' (currently) only allowd for string valued matrices. If the option 'redo = TRUE' is needed for integer values matrices please contact the author.");
+      //if (ncol == 1) ERR0("'redo = TRUE', but a single SNP sequence is given");
+      if (start != 0) ERR0("recoding must start from the beginning (start=0).");
       redoCoding(M, nrow, ncol);
     }
   } else {
-    ERR("'idx x snp' currently disabled. Please contact author if needed.");
+    ERR0("'idx x snp' currently disabled. Please contact author if needed.");
     size = ncol;
     codencol = 1 + (ncol + startremainder - 1) / codesPerUnit;
     codenrow = nrow;
     if (coding_type == local && LOGICAL(RedoCoding)[0] && nrow > 1)
-      ERR("local recoding is not defined for individual x SNP matrices");
+      ERR0("local recoding isn't defined for individual x SNP matrices");
   }
 
-  if (ismatrix) PROTECT(Code = allocMatrix(INTSXP, codenrow, codencol));
-  else PROTECT(Code = allocVector(INTSXP, codenrow));
+  
+  if (ismatrix) PROTECT(Code = allocMatrix(INTSXP, stopIfNotInt(codenrow),
+					   stopIfNotInt(codencol)));
+  else PROTECT(Code = allocVector(INTSXP, stopIfNotInt(codenrow)));
   for (Uint i=0; i<codenrow * codencol; INTEGER(Code)[i++] = 0);
 
-  codeInner(M, nrow, ncol, start, (Uint*) INTEGER(Code), snpxind, codenrow * codencol);
+  codeInner(M, nrow, ncol, start, (Uint*) INTEGER(Code),
+	    snpxind, stopIfNotUint(codenrow * codencol));
 
   SEXP Posvec;
   PROTECT(Posvec = allocVector(INTSXP, POSLAST + 1));
-  int *posvec = INTEGER(Posvec);
+  Uint *posvec = (Uint*) INTEGER(Posvec);
   posvec[START] = start; // first SNP in SNP sequence
   //  posvec[END] = start + size - 1; // last SNP in SNP sequence
   posvec[END] = start + size - 1; // last SNP in SNP sequence
-  posvec[CODENROW] = codenrow;// number of filled codes
-  posvec[CODENCOL] = codencol;// number of filled codes
+  posvec[CODENROW] = stopIfNotUint(codenrow);// number of filled codes
+  posvec[CODENCOL] = stopIfNotUint(codencol);// number of filled codes
   posvec[SNPxIND] = snpxind;// number of filled codes
   posvec[STARTREMAINDER] = startremainder;// first used position in code
   posvec[ENDREMAINDER] = posvec[END] % codesPerUnit;
@@ -399,11 +391,11 @@ SEXP codeSNPs(SEXP M, SEXP Start, SEXP RedoCoding, SEXP SNPxINDIV) {
 SEXP decodeSNPs(SEXP CM) {
   SEXP Ans;
   SEXP Pos = getAttrib(CM, Position);
-  int incr, cv_factor, k_factor,
+  Long cv_factor;
+  SEXPTYPE type = coding_type == numeric ? INTSXP : STRSXP;
+  Uint  incr, endnc, k_factor,
     k=0,
-    *pos = INTEGER(Pos),
-    type = coding_type == numeric ? INTSXP : STRSXP;
-  Uint  endnc,
+    *pos = (Uint*) INTEGER(Pos),
     size = pos[END] - pos[START] + 1,
     codenrow = pos[CODENROW], // =nrows(CM) bzw length(CM)
     codencol = pos[CODENCOL], // =nrows(CM) bzw length(CM)
@@ -423,9 +415,11 @@ SEXP decodeSNPs(SEXP CM) {
     k_factor = 1;
   }
 
-  if (isMatrix(CM)) PROTECT(Ans = allocMatrix(type, snpxind ? size : codenrow,
-					      snpxind ? codencol : size));
-  else PROTECT(Ans = allocVector(type, size));
+  if (isMatrix(CM))
+    PROTECT(Ans = allocMatrix(type,
+			      stopIfNotInt(snpxind ? size : codenrow),
+			      stopIfNotInt(snpxind ? codencol : size)));
+  else PROTECT(Ans = allocVector(type, stopIfNotInt(size)));
 
   if (coding_type == numeric) { ENSURE(codes); } else {  ENSURE(strcodes); }
 
@@ -476,7 +470,7 @@ bool notequal(Uint *a, Uint *b, Uint c_start, Uint c_end, Uint startremainder,
 }
 
 typedef struct pattern {
-  int where, ith, count;
+  Uint where, ith, count;
   pattern *next;
 } pattern;
 
@@ -486,8 +480,8 @@ typedef struct pattern {
 SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
   SEXP Pos = getAttrib(CM, Position);
   int *pos = INTEGER(Pos);
-  if (!pos[SNPxIND]) ERR("'factorSNPs' only defined for SNPxINDIVID matrices");
-  if (INTEGER(Start)[0] < 0) ERR("value of 'start' must be positive.");
+  if (!pos[SNPxIND]) ERR0("'factorSNPs' only defined for SNPxINDIVID matrices");
+  if (INTEGER(Start)[0] < 0) ERR0("value of 'start' must be positive.");
   Uint addtofirst,
     start = (Uint) INTEGER(Start)[0],
     end =  (Uint) INTEGER(End)[0],
@@ -497,8 +491,8 @@ SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
     endremainder = end % codesPerUnit,
     *cm = ((Uint*) INTEGER(CM)),
     *cur_cm = cm,
-    nrow = nrows(CM),
-    ncol = ncols(CM)
+    nrow = (Uint) nrows(CM),
+    ncol = (Uint) ncols(CM)
     ;
   short Uint *first,
     SHORT_ONES = 0xFFFF,
@@ -507,22 +501,22 @@ SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
   SEXP Factor;
   PROTECT(Factor = allocVector(INTSXP, ncol));
 
-  int
-     *factor = INTEGER(Factor),
+  Uint
+    *factor = (Uint*) INTEGER(Factor),
     ith = 0;
 
 #define tablelength (1 << (sizeof(*first) * 8))
   pattern *patternTable[tablelength];
   for (Uint i=0; i < tablelength; i++) patternTable[i] = NULL;
-  if (start > end) ERR("value of 'start' smaller than that of 'end'.");
-  if ((int) end > pos[END]) ERR("value of 'end' outside the matrix 'CM'.");
+  if (start > end) ERR0("value of 'start' smaller than that of 'end'.");
+  if ((int) end > pos[END]) ERR0("value of 'end' outside the matrix 'CM'.");
 
   // where to base in hashing on
   // c_end > c_start + 1 : easy, at least one filled word (word = short Uint)
   // c_end == c_start : only the choice of two (lower or upper word)
   // else : 4 choices (lower and upper word of c_start and c_end
   if (c_end > c_start + 1) {
-    addtofirst = sizeof(Uint) / sizeof(short Uint);
+    addtofirst = sizeof(Uint) / sizeof(short Uint); // OK
     assert(addtofirst == 2);
   } else {
     Uint shift,
@@ -538,7 +532,7 @@ SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
 	  firstpattern = ((firstpattern << shift) & SHORT_ONES) >> shift;
 	assert(in_end >= half);
 	shift = (codesPerUnit - in_end) * bitsPerCode;
-	firstpattern = (firstpattern >> shift) << shift;
+	firstpattern = (short Uint) ((firstpattern >> shift) << shift);
       } else {
 	//
 	assert(in_start >= half);
@@ -546,7 +540,8 @@ SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
 	shift = (codesPerUnit - in_start) * bitsPerCode;
 	firstpattern = ((firstpattern << shift) & SHORT_ONES) >> shift;
 	shift = (half - in_end) * bitsPerCode;
-	if (shift > 0) firstpattern = (firstpattern >> shift) << shift;
+	if (shift > 0)
+	  firstpattern = (short Uint) ((firstpattern >> shift) << shift);
       }
     } else {
       if (in_start >= half) addtofirst = BigEndian;
@@ -558,7 +553,7 @@ SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
       } else {
 	addtofirst = 2 + 1 - BigEndian;
 	shift = (half - in_end) * bitsPerCode;
-	firstpattern = (firstpattern >> shift) << shift;
+	firstpattern = (short Uint) ((firstpattern >> shift) << shift);
       }
     }
   }
@@ -583,8 +578,8 @@ SEXP factorSNPs(SEXP CM, SEXP Start, SEXP End) {
   SEXP WhereVec, CountsVec;
   PROTECT(WhereVec = allocVector(INTSXP, ith));
   PROTECT(CountsVec = allocVector(INTSXP, ith));
-  int *where = INTEGER(WhereVec),
-    *count = INTEGER(CountsVec);
+  Uint *where = (Uint*) INTEGER(WhereVec),
+    *count = (Uint*) INTEGER(CountsVec);
   for (Uint i=0; i < tablelength; i++) {
     pattern *p = patternTable[i];
     while (p != NULL) {
@@ -608,17 +603,19 @@ SEXP colSumsEqualSNPs(SEXP  CM, SEXP Start, SEXP CV, SEXP Select) {
   SEXP Pos = getAttrib(CV, Position);
   int *pos = INTEGER(Pos);
   if (!pos[SNPxIND])
-    ERR("'colSumsEqualSNPs' only defined for SNPxINDIVID matrices");
+    ERR0("'colSumsEqualSNPs' only defined for SNPxINDIVID matrices");
   Uint *cm_orig = (Uint*)  INTEGER(CM),
     *cv = (Uint*)  INTEGER(CV),
-    ncol_cv = isMatrix(CV) ? ncols(CV) : 1,
-    nrow_cv = isMatrix(CV) ? nrows(CV) : length(CV),
-    len = length(Select),
-    *select = len == 0 ? NULL : (Uint*) INTEGER(Select),
-    nrow = nrows(CM),
-    ncol = len == 0 ? ncols(CM) : len,
+    ncol_cv = (Uint) (isMatrix(CV) ? ncols(CV) : 1),
+    nrow_cv = (Uint) (isMatrix(CV) ? nrows(CV) : length(CV)),
+    len = (Uint) length(Select),
+    *select = len == 0 ? NULL : (Uint*) INTEGER(Select);
+  Long
+    nrow = (Uint) nrows(CM),
+    ncol = len == 0 ? (Uint) ncols(CM) : len;
+  Uint
     size =  (Uint) (pos[END] - pos[START] + 1),
-    start = INTEGER(Start)[0],
+    start = (Uint) INTEGER(Start)[0],
     end =  start + size - 1,
     c_start = start / codesPerUnit,
     c_end = end / codesPerUnit,
@@ -654,9 +651,9 @@ SEXP colSumsEqualSNPs(SEXP  CM, SEXP Start, SEXP CV, SEXP Select) {
   // bool ANYvalue = GLOBAL.blocker.ANY_diff_value != 0.0 ||
   //    GLOBAL.blocker.ANY_allequal_value != 0.0;
   //  int SXP = ANYvalue ? REALSXP : INTSXP;
-  int SXP = INTSXP;
+  SEXPTYPE SXP = INTSXP;
   SEXP Ans;
-  if (isMatrix(CV)) PROTECT(Ans = allocMatrix(SXP, ncol, ncol_cv));
+  if (isMatrix(CV)) PROTECT(Ans = allocMatrix(SXP, (int) ncol, (int) ncol_cv));
   else PROTECT(Ans = allocVector(SXP, ncol));
 
   //do not delete next comment: started work 20 March 2018 with Torsten, see
@@ -716,7 +713,7 @@ SEXP colSumsEqualSNPs(SEXP  CM, SEXP Start, SEXP CV, SEXP Select) {
 	if (i == c_end) { // might happen for very small sizes
 	  difference.d >>= startremainderBpC + endshift;
 	  sum_unequal = unequal[difference.x[0]] + unequal[difference.x[1]];
-	  ans[nc] = size - sum_unequal;
+	  ans[nc] = (int) ((Long) size - (Long) sum_unequal);
 	  continue;
 	}
 
@@ -728,7 +725,7 @@ SEXP colSumsEqualSNPs(SEXP  CM, SEXP Start, SEXP CV, SEXP Select) {
 	difference.d = cv[j] ^ cm[i];
 	difference.d >>= endshift;
 	sum_unequal += unequal[difference.x[0]] + unequal[difference.x[1]];
-	ans[nc] = size - sum_unequal;
+	ans[nc] = (int) ((Long) size - (Long) sum_unequal);
       }
     }
   }
@@ -741,13 +738,13 @@ SEXP colSumsEqualSNPs(SEXP  CM, SEXP Start, SEXP CV, SEXP Select) {
 #define INTERSECT(INT1, INT2, INTEGER1, INTEGER2)			\
   INT1 *a = INTEGER1(A);						\
   INT2 *b = INTEGER2(B);						\
-  for (int i=0; i<lenA; i++) {						\
+  for (Uint i=0; i<lenA; i++) {						\
     INT1 aa = a[i];							\
     if (i > 0 && aa <= a[i-1]) { PRINTF("%d %d\n", (int) a[i-1], (int) aa); BUG;} \
     while (iB < lenB && b[iB] < aa) iB++;				\
     if (iB == lenB) break;						\
     if (aa == b[iB]) {							\
-      intersct[n++] = aa;						\
+      intersct[n++] = (Uint) aa;					\
       iB++;								\
     }									\
   }
@@ -755,14 +752,13 @@ SEXP colSumsEqualSNPs(SEXP  CM, SEXP Start, SEXP CV, SEXP Select) {
 
 SEXP intersect(SEXP A, SEXP B){
   //printf("%d %d %d %d\n", TYPEOF(A), TYPEOF(B), length(A), length(B));
-  int n = 0,
-    lenA = length(A),
-    lenB = length(B),
-    maxlen = lenA <= lenB ? lenA : lenB,
+  Uint n = 0,
+    lenA = (Uint) length(A),
+    lenB = (Uint) length(B),
     iB = 0;
+  Ulong maxlen = lenA <= lenB ? lenA : lenB;
   if (lenA == 0 || lenB == 0) return allocVector(INTSXP, 0);
-  int
-    *intersct = (int*) MALLOC(sizeof(int) * maxlen);
+  Uint *intersct = (Uint*) MALLOC(sizeof(Uint) *  maxlen);
   SEXP Ans;
   if (TYPEOF(A) == INTSXP) {
     if (TYPEOF(B) == INTSXP) { INTERSECT(int, int, INTEGER, INTEGER); }
@@ -772,8 +768,8 @@ SEXP intersect(SEXP A, SEXP B){
     else { INTERSECT(double, double, REAL, REAL); }
   }
   PROTECT(Ans = allocVector(INTSXP, n));
-  int *ans = INTEGER(Ans);
-  for (int i=0; i<n; i++) ans[i] = intersct[i];
+  Uint *ans = (Uint*) INTEGER(Ans);
+  for (Uint i=0; i<n; i++) ans[i] = intersct[i];
   FREE(intersct);
   UNPROTECT(1);
   return Ans;

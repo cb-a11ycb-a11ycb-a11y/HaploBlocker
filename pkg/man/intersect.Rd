@@ -2,7 +2,7 @@
 \alias{intersect_c}
 \title{Intersection of sets}
 \description{
-  A fast implementation of R command \command{\link[base]{intersect}}
+  A fast implementation of R command \code{\link[base]{intersect}}
   for interger valued, sorted vectors
 }
 \usage{
@@ -21,7 +21,7 @@ intersect_c(a, b)
 \author{Martin Schlather, \email{schlather@math.uni-mannheim.de}}
 
 \seealso{
-  \command{\link[base]{intersect}}
+  \code{\link[base]{intersect}}
 }
 
 \examples{

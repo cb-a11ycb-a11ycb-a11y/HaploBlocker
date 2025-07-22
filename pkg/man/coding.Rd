@@ -5,7 +5,7 @@
 \title{Coding}
 \description{
   These function code and decode genetic matrices according to the code
-  fixed by  \command{\link{fixcoding}}
+  fixed by  \code{\link{fixcoding}}
 }
 \usage{
 codeSNPs(M, redo=is.character(M), SNPxINDIVID=TRUE)
@@ -23,14 +23,14 @@ decodeSNPs(CM)
   \item{CM}{coded matrix or vector}
 }
 \value{
-  \command{codeSNPs} returns a coded matrix or a vector.
-  \command{decodeSNPs} returns a matrix or a vector in human readable form. 
+  \code{codeSNPs} returns a coded matrix or a vector.
+  \code{decodeSNPs} returns a matrix or a vector in human readable form. 
 }
 
 \author{Martin Schlather, \email{schlather@math.uni-mannheim.de}}
 
 \seealso{
-  \command{\link{fixcoding}}
+  \code{\link{fixcoding}}
 }
 
 \examples{

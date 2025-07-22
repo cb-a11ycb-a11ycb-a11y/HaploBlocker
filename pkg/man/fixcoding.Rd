@@ -38,7 +38,7 @@ fixcoding(values)
 \author{Martin Schlather, \email{schlather@math.uni-mannheim.de}}
 
 \seealso{
-  \command{\link{codeSNPs}}, \command{\link{decodeSNPs}}
+  \code{\link{codeSNPs}}, \code{\link{decodeSNPs}}
 }
 
 \examples{

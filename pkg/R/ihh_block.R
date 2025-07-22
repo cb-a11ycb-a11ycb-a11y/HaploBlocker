@@ -22,7 +22,7 @@ block_ihh <- function(blocklist=NULL, data=NULL, plot=FALSE, position1=NULL, sta
     group[[1]] <- 1:indi_calc(blocklist)
   }
   if(length(blocklist)==0){
-    library(HaploBlocker)
+    require(HaploBlocker)
     blocklist <- block_calculation(data, verbose = verbose)
   }
   if(length(position1)==0){
