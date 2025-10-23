@@ -5,7 +5,7 @@ Version: 1.7.2
 Author: Torsten Pook[aut, cre], Martin Schlather[aut]
 Maintainer: Martin Schlather <martin.schlather@uni-mannheim.de>
 Description: Framework for the creation of haplotype blocks and haplotype library in phased genomic data. Haplotype blocks blocks are identified as cases of groupwise Identity-by-Descent. Associated publication: Pook et al. 2019 <doi:10.1534/genetics.119.302283>.
-Depends: R (>= 3.0), RandomFieldsUtils (>= 1.4)
+Depends: R (>= 3.0)
 Suggests: vcfR, RColorBrewer, foreach, doParallel
 License: GPL ( >= 3)
 Encoding: UTF-8
